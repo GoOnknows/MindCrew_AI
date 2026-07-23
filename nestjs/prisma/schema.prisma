@@ -1,0 +1,195 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── 用户表 ───
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  email     String   @unique
+  password  String
+  role      String   @default("viewer") // admin | manager | editor | viewer | owner
+  dept      String   @default("技术部")
+  status    String   @default("active")  // active | inactive
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  chatSessions  ChatSession[]
+  documents     Document[]
+  researchTasks ResearchTask[]
+}
+
+// ─── 登录会话表 ───
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+}
+
+// ─── 对话会话表 ───
+model ChatSession {
+  id        String   @id @default(uuid())
+  userId    String?
+  title     String   @default("新对话")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+}
+
+// ─── 对话消息表 ───
+model ChatMessage {
+  id        String   @id @default(uuid())
+  sessionId String
+  role      String   // user | assistant | system | tool
+  content   String
+  toolCalls Json?    // [{name, args, result}]
+  createdAt DateTime @default(now())
+
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+// ─── 知识库文档表 ───
+model Document {
+  id         String   @id @default(uuid())
+  name       String
+  type       String   // pdf | docx | md | txt
+  size       String   // human-readable size
+  path       String   // 文件存储路径
+  status     String   @default("uploaded") // uploaded | processing | indexed | failed
+  chunkCount Int      @default(0)
+  uploadedBy String?
+  createdAt  DateTime @default(now())
+
+  user     User?    @relation(fields: [uploadedBy], references: [id], onDelete: SetNull)
+  chunks   DocChunk[]
+
+  @@index([status])
+  @@index([uploadedBy])
+}
+
+// ─── 文档分块表 ───
+model DocChunk {
+  id         String   @id @default(uuid())
+  documentId String
+  content    String
+  chunkIndex Int
+  createdAt  DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+}
+
+// ─── 调研任务表 ───
+model ResearchTask {
+  id              String   @id @default(uuid())
+  topic           String
+  status          String   @default("pending") // pending | running | completed | failed
+  progress        Int      @default(0)
+  agents          String[] // [Planner, Researcher, Writer, Critic]
+  researcherCount Int      @default(1)
+  sourcesFound    Int      @default(0)
+  report          String?  // 生成的报告内容 (Markdown)
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user      User?            @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  agentLogs ResearchAgentLog[]
+
+  @@index([status])
+  @@index([createdBy])
+}
+
+// ─── Agent 执行日志表 ───
+model ResearchAgentLog {
+  id       String   @id @default(uuid())
+  taskId   String
+  agent    String   // Planner | Researcher | Writer | Critic
+  action   String   // thought | action | observation | output
+  content  String
+  metadata Json?
+  createdAt DateTime @default(now())
+
+  task ResearchTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([createdAt])
+}
+
+// ─── AI 模型配置表 ───
+model AiModel {
+  id          String   @id @default(uuid())
+  name        String   // 显示名称，如 "通义千问"
+  modelName   String   // API 模型名称，如 "qwen-turbo"
+  baseUrl     String   // API 基础地址
+  apiKey      String   // API 密钥
+  temperature Float    @default(0.7)
+  maxTokens   Int      @default(4096)
+  isDefault   Boolean  @default(false)
+  order       Int      @default(0) // 排序
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─── 系统配置表 ───
+model SystemConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String   // JSON string
+  updatedAt DateTime @updatedAt
+
+  @@index([key])
+}
+
+// ─── 每日统计表 ───
+model DailyStat {
+  id        String   @id @default(uuid())
+  date      DateTime @unique
+  qaCount   Int      @default(0)
+  userCount Int      @default(0)
+  tokenUsed Int      @default(0) // 消耗的 token 数量
+  createdAt DateTime @default(now())
+
+  @@index([date])
+}
+
+// ─── 工具调用统计表 ───
+model ToolUsage {
+  id           String   @id @default(uuid())
+  toolName     String
+  date         DateTime
+  callCount    Int      @default(0)
+  avgLatencyMs Float    @default(0)
+  createdAt    DateTime @default(now())
+
+  @@unique([toolName, date])
+  @@index([date])
+}
+
+// ─── 活动日志表 (用于首页最近活动) ───
+model Activity {
+  id        String   @id @default(uuid())
+  type      String   // chat | research | document | config | user
+  icon      String   // emoji
+  text      String
+  userId    String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}

@@ -1,0 +1,392 @@
+/* ========== CSS Variables ========== */
+
+
+:root:not(.dark) {
+  --color-primary: #d97757;
+  --color-primary-rgb: 217, 119, 87;
+  --color-primary-light: #e89873;
+  --color-primary-light-rgb: 232, 152, 115;
+  --color-primary-dark: #c46a4f;
+  --color-primary-dark-rgb: 196, 106, 79;
+  --color-bg: #faf9f5;
+  --color-bg-rgb: 250, 249, 245;
+  --color-bg-elevated: #ffffff;
+  --color-bg-elevated-rgb: 255, 255, 255;
+  --color-bg-overlay: #e8e6dc;
+  --color-bg-overlay-rgb: 232, 230, 220;
+  --color-card: #ffffff;
+  --color-card-rgb: 255, 255, 255;
+  --color-sidebar: #ffffff;
+  --color-sidebar-rgb: 255, 255, 255;
+  --color-border: #e8e6dc;
+  --color-border-rgb: 232, 230, 220;
+  --color-text: #141413;
+  --color-text-rgb: 20, 20, 19;
+  --color-text-muted: #b0aea5;
+  --color-text-muted-rgb: 176, 174, 165;
+  --color-success: #788c5d;
+  --color-success-rgb: 120, 140, 93;
+  --color-warning: #d97757;
+  --color-warning-rgb: 217, 119, 87;
+  --color-danger: #c46a4f;
+  --color-danger-rgb: 196, 106, 79;
+  --color-info: #6a9bcc;
+  --color-info-rgb: 106, 155, 204;
+
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 64px;
+  --header-height: 56px;
+}
+
+
+:root {
+  --color-primary: #d97757;
+  --color-primary-rgb: 217, 119, 87;
+  --color-primary-light: #e89873;
+  --color-primary-light-rgb: 232, 152, 115;
+  --color-primary-dark: #b85a3f;
+  --color-primary-dark-rgb: 184, 90, 63;
+  --color-bg: #141413;
+  --color-bg-rgb: 20, 20, 19;
+  --color-bg-elevated: #1c1c1a;
+  --color-bg-elevated-rgb: 28, 28, 26;
+  --color-bg-overlay: #2a2a28;
+  --color-bg-overlay-rgb: 42, 42, 40;
+  --color-card: #1c1c1a;
+  --color-card-rgb: 28, 28, 26;
+  --color-sidebar: #141413;
+  --color-sidebar-rgb: 20, 20, 19;
+  --color-border: #2a2a28;
+  --color-border-rgb: 42, 42, 40;
+  --color-text: #faf9f5;
+  --color-text-rgb: 250, 249, 245;
+  --color-text-muted: #b0aea5;
+  --color-text-muted-rgb: 176, 174, 165;
+  --color-success: #788c5d;
+  --color-success-rgb: 120, 140, 93;
+  --color-warning: #d97757;
+  --color-warning-rgb: 217, 119, 87;
+  --color-danger: #c46a4f;
+  --color-danger-rgb: 196, 106, 79;
+  --color-info: #6a9bcc;
+  --color-info-rgb: 106, 155, 204;
+}
+
+/* ========== Global Reset ========== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Lora', 'PingFang SC', 'Microsoft YaHei', Georgia, serif;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  height: 100%;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Poppins', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* ========== Element Plus Overrides (Dark Theme) ========== */
+
+/* Sidebar menu */
+.el-menu {
+  border-right: none !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* Card override */
+.el-card {
+  background-color: var(--color-bg-elevated) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text) !important;
+}
+
+/* Table */
+.el-table {
+  --el-table-bg-color: var(--color-bg-elevated);
+  --el-table-tr-bg-color: var(--color-bg-elevated);
+  --el-table-header-bg-color: var(--color-bg);
+  --el-table-border-color: var(--color-border);
+  --el-table-text-color: var(--color-text);
+  --el-table-header-text-color: var(--color-text-muted);
+}
+
+/* Dialog */
+.el-dialog {
+  --el-dialog-bg-color: var(--color-bg-elevated);
+}
+
+/* Input / Select — use Element Plus CSS variables, don't fight box-shadow */
+.el-input__wrapper {
+  background-color: var(--color-bg) !important;
+  box-shadow: 0 0 0 1px var(--color-border) inset !important;
+  /* Global reset * { padding:0 } overrides Element Plus's padding — restore it */
+  padding: 1px 11px !important;
+}
+.el-input__wrapper:hover {
+  box-shadow: 0 0 0 1px var(--color-text-muted) inset !important;
+}
+.el-input__wrapper.is-focus {
+  box-shadow: 0 0 0 1px var(--color-primary) inset !important;
+}
+
+.el-textarea__inner {
+  background-color: var(--color-bg) !important;
+  border: 1px solid var(--color-border) !important;
+  box-shadow: none !important;
+  color: var(--color-text) !important;
+}
+
+.el-input__inner {
+  color: var(--color-text) !important;
+}
+
+/* Select — 仅覆盖颜色和边框，不改变布局模型 */
+.el-select__wrapper {
+  background-color: var(--color-bg) !important;
+  box-shadow: 0 0 0 1px var(--color-border) inset !important;
+}
+.el-select__wrapper:hover {
+  box-shadow: 0 0 0 1px var(--color-text-muted) inset !important;
+}
+.el-select__wrapper.is-focus {
+  box-shadow: 0 0 0 1px var(--color-primary) inset !important;
+}
+.el-select .el-input__wrapper {
+  box-shadow: none !important;
+  background: transparent !important;
+}
+.el-select .el-input__inner {
+  color: var(--color-text) !important;
+}
+.el-select__placeholder {
+  color: var(--color-text-muted) !important;
+}
+.el-select__caret svg {
+  width: 1em !important;
+  height: 1em !important;
+}
+
+/* Pagination */
+.el-pagination {
+  --el-pagination-bg-color: transparent;
+  --el-pagination-text-color: var(--color-text-muted);
+}
+
+/* Tabs */
+.el-tabs__header {
+  --el-tabs-header-border-color: var(--color-border);
+}
+
+/* Fix: password eye icon blown up — .el-input__icon height:inherit overrides .el-icon's 1em */
+.el-input .el-input__icon svg {
+  width: 1em !important;
+  height: 1em !important;
+}
+
+/* Fix: el-input-number +/- buttons too large */
+.el-input-number__decrease,
+.el-input-number__increase {
+  font-size: 12px !important;
+}
+.el-input-number__decrease svg,
+.el-input-number__increase svg {
+  width: 1em !important;
+  height: 1em !important;
+}
+
+/* Fix: el-button icon sizing — keep them at 1em */
+.el-button .el-icon svg {
+  width: 1em !important;
+  height: 1em !important;
+}
+
+/* Fix: el-input clear / password-toggle icons */
+.el-input__clear svg,
+.el-input__suffix .el-icon svg {
+  width: 1em !important;
+  height: 1em !important;
+}
+
+/* Fix: el-avatar icon sizing */
+.el-avatar .el-icon svg {
+  width: 1em !important;
+  height: 1em !important;
+}
+
+/* Fix: el-tag icon sizing */
+.el-tag .el-icon svg {
+  width: 1em !important;
+  height: 1em !important;
+}
+
+/* Fix: el-table sort arrows */
+.el-table .el-icon svg {
+  width: 1em !important;
+  height: 1em !important;
+}
+
+/* Fix: el-pagination prev/next arrows */
+.el-pagination .el-icon svg {
+  width: 1em !important;
+  height: 1em !important;
+}
+
+/* Fix: el-dropdown arrow */
+.el-dropdown .el-icon svg {
+  width: 1em !important;
+  height: 1em !important;
+}
+
+/* Fix: el-message (toast 通知) 图标撑开 — 全局 * { padding:0 } 导致布局崩塌 */
+.el-message .el-icon svg {
+  width: 1em !important;
+  height: 1em !important;
+}
+
+/* ========== Select Dropdown — teleported to body, needs explicit styling ========== */
+.el-select-dropdown {
+  background-color: var(--color-bg-elevated) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12) !important;
+  margin-top: 4px !important;
+}
+
+.el-select-dropdown__wrap {
+  padding: 4px 0 !important;
+}
+
+.el-select-dropdown__list {
+  padding: 0 !important;
+}
+
+.el-select-dropdown__item {
+  color: var(--color-text) !important;
+  padding: 8px 16px !important;
+  margin: 2px 6px !important;
+  border-radius: 6px !important;
+  font-size: 13px !important;
+  transition: background-color 0.15s !important;
+}
+
+.el-select-dropdown__item.is-hovering,
+.el-select-dropdown__item:hover {
+  background-color: var(--color-bg-overlay) !important;
+}
+
+.el-select-dropdown__item.is-selected {
+  color: var(--color-primary-light) !important;
+  background-color: rgba(217, 119, 87, 0.08) !important;
+  font-weight: 600 !important;
+}
+
+/* Override popper arrow background */
+.el-select-dropdown .el-popper__arrow::before {
+  background: var(--color-bg-elevated) !important;
+  border-color: var(--color-border) !important;
+}
+
+/* Fix: select dropdown option icon sizing */
+.el-select-dropdown .el-icon svg {
+  width: 1em !important;
+  height: 1em !important;
+}
+
+/* Map Element Plus CSS vars to our custom theme */
+:root {
+  --el-bg-color-overlay: var(--color-bg-elevated);
+  --el-border-color-light: var(--color-border);
+  --el-fill-color-light: var(--color-bg-overlay);
+  --el-text-color-regular: var(--color-text);
+  --el-text-color-placeholder: var(--color-text-muted);
+  --el-color-primary: var(--color-primary);
+  --el-color-success: var(--color-success);
+  --el-color-warning: var(--color-warning);
+  --el-color-danger: var(--color-danger);
+  --el-color-info: var(--color-info);
+}
+
+/* ========== Anthropic-style Button Overrides ========== */
+
+.el-button {
+  border-radius: 8px !important;
+  font-family: 'Poppins', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+}
+
+.el-button--primary {
+  --el-button-bg-color: var(--color-primary);
+  --el-button-border-color: var(--color-primary);
+  --el-button-hover-bg-color: var(--color-primary-light);
+  --el-button-hover-border-color: var(--color-primary-light);
+  --el-button-active-bg-color: var(--color-primary-dark);
+  --el-button-active-border-color: var(--color-primary-dark);
+}
+
+.el-button--primary:hover {
+  opacity: 0.85;
+}
+
+.el-button--default {
+  --el-button-bg-color: transparent;
+  --el-button-border-color: var(--color-border);
+  --el-button-text-color: var(--color-text-muted);
+  --el-button-hover-bg-color: var(--color-bg-overlay);
+  --el-button-hover-border-color: var(--color-text-muted);
+  --el-button-hover-text-color: var(--color-text);
+  --el-button-active-bg-color: var(--color-bg-overlay);
+  --el-button-active-border-color: var(--color-text-muted);
+}
+
+.el-button--default:hover {
+  background-color: var(--color-bg-overlay) !important;
+  border-color: var(--color-text-muted) !important;
+  color: var(--color-text) !important;
+}
+
+.el-button--text {
+  color: var(--color-text-muted) !important;
+}
+.el-button--text:hover {
+  color: var(--color-primary) !important;
+  background-color: transparent !important;
+}
+
+/* Fix: el-button text-base override for header buttons */
+.el-button.text-text {
+  --el-button-text-color: var(--color-text);
+}
