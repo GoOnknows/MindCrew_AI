@@ -8,18 +8,21 @@ import {
   Sse,
   UseGuards,
   Request,
+  Logger,
 } from '@nestjs/common';
-import { from, Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { from, Observable, of } from 'rxjs';
+import { catchError, concatWith, map } from 'rxjs/operators';
 import { ChatService } from './chat.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 
 @Controller('api/chat')
 export class ChatController {
+  private readonly logger = new Logger(ChatController.name);
+
   constructor(private readonly chatService: ChatService) {}
 
   /**
-   * SSE 流式对话接口 — 增强版 RAG 注入
+   * SSE 流式对话接口
    */
   @UseGuards(JwtAuthGuard)
   @Sse('/stream')
@@ -36,7 +39,12 @@ export class ChatController {
       req?.user?.id,
     );
     return from(stream).pipe(
+      catchError((err) => {
+        this.logger.error('Stream error:', err);
+        return of(`[ERROR] ${err.message || 'Unknown error'}`);
+      }),
       map((chunk) => ({ data: chunk })),
+      concatWith(of({ data: '[DONE]' })),
     ) as Observable<MessageEvent<string>>;
   }
 

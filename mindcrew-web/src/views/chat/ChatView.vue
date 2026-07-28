@@ -18,26 +18,31 @@ const models = ref<ModelConfig[]>([])
 const selectedModelId = ref<string | undefined>(undefined)
 const modelLoading = ref(true)
 
-/**
- * AbortController — 用于在组件卸载时中断正在进行的 SSE 流式请求
- *
- * 考点：AbortController + fetch 中断机制
- *   - AbortController 是 Web API，用于取消异步操作（fetch、事件监听等）
- *   - controller.signal 传递给 fetch，调用 controller.abort() 时 fetch 会抛出 AbortError
- *   - 需要区分"用户主动取消"（AbortError）和"真正的网络错误"
- *   - 如果不处理组件卸载时的流式请求，会导致：
- *     1. 内存泄漏（fetch 和 reader 未释放）
- *     2. 对已卸载组件的响应式状态更新，可能触发 Vue 渲染警告
- *     3. SSE 数据持续写入 messages，导致已卸载组件的数据残留
- */
-let abortController: AbortController | null = null
+let es: EventSource | null = null
+const streamBuffer = ref('')
+const streamingContent = ref('')
+const streamingMsgId = ref('')
+
+// 每 80ms 从缓冲区取 1 个字符追加到 streamingContent，实现打字机效果
+function renderStream() {
+  if (streamBuffer.value.length === 0) return
+  streamingContent.value += streamBuffer.value[0]
+  streamBuffer.value = streamBuffer.value.slice(1)
+  if (streamBuffer.value.length > 0) {
+    setTimeout(renderStream, 80)
+  }
+}
+
+function resetStreamingState() {
+  streamingMsgId.value = ''
+  streamingContent.value = ''
+  streamBuffer.value = ''
+}
 
 onBeforeUnmount(() => {
-  // 组件卸载时中断正在进行的流式请求
-  if (abortController) {
-    abortController.abort()
-    abortController = null
-  }
+  es?.close()
+  es = null
+  resetStreamingState()
 })
 
 function scrollToBottom() {
@@ -135,59 +140,60 @@ async function handleSend() {
   const token = localStorage.getItem('token')
   const params = new URLSearchParams({ query: text })
   if (currentSessionId.value) params.set('sessionId', currentSessionId.value)
-  if (selectedModelId.value) params.set('modelId', selectedModelId.value)
+  if (selectedModelId.value) params.set('model', selectedModelId.value)
+  if (token) params.set('token', token)
 
   const aiMsg: Msg = { id: 'ai-' + Date.now(), role: 'assistant', content: '', timestamp: Date.now() }
   messages.value.push(aiMsg)
+  streamingMsgId.value = aiMsg.id
+  streamingContent.value = ''
+  streamBuffer.value = ''
 
-  // 创建新的 AbortController，用于中断本次流式请求
-  abortController = new AbortController()
+  
+  const url = `/api/chat/stream?${params.toString()}`
+  es = new EventSource(url)
 
-  try {
-    const url = `/api/chat/stream?${params.toString()}`
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: abortController.signal,
-    })
-    if (!response.ok) throw new Error('Stream request failed')
-    const reader = response.body?.getReader()
-    const decoder = new TextDecoder()
-    if (!reader) throw new Error('No reader')
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      const text = decoder.decode(value, { stream: true })
-      for (const line of text.split('\n')) {
-        if (line.startsWith('data:')) {
-          const data = line.slice(5).trim()
-          if (data.startsWith('__SESSION__:')) {
-            const sid = data.replace('__SESSION__:', '').replace('__', '')
-            if (sid && !currentSessionId.value) {
-              currentSessionId.value = sid
-              await loadSessions()
-            }
-          } else if (data !== '[DONE]') {
-            aiMsg.content += data
-          }
-        }
+  es.onmessage = (event) => {
+    const data = event.data
+    if (data.startsWith('[ERROR]')) {
+      streamingContent.value = data
+      aiMsg.content = data
+      resetStreamingState()
+      es?.close()
+      es = null
+      isStreaming.value = false
+      loadSessions()
+      scrollToBottom()
+    } else if (data === '[DONE]') {
+      // 同步已显示内容 + 缓冲区剩余内容，避免最后几个字丢失
+      aiMsg.content = streamingContent.value + streamBuffer.value
+      resetStreamingState()
+      es?.close()
+      es = null
+      isStreaming.value = false
+      loadSessions()
+      scrollToBottom()
+    } else if (data.startsWith('__SESSION__:')) {
+      const sid = data.replace('__SESSION__:', '').replace('__', '')
+      if (sid && !currentSessionId.value) {
+        currentSessionId.value = sid
+        loadSessions()
       }
+    } else {
+      streamBuffer.value += data
+      renderStream()
     }
-  } catch (e) {
-    // 区分用户主动取消（AbortError）和真正的网络错误
-    // AbortError.name === 'AbortError'，说明是组件卸载时主动中断的，不需要显示错误
-    if ((e as Error).name === 'AbortError') {
-      // 用户切换页面或组件卸载，静默处理
-      return
-    }
-    aiMsg.content = aiMsg.content || `[错误] ${(e as Error).message}`
-  } finally {
-    abortController = null
-    isStreaming.value = false
   }
 
-  await loadSessions()
-  scrollToBottom()
+  es.onerror = () => {
+    aiMsg.content = streamingContent.value + streamBuffer.value || '[连接失败，请检查网络或登录状态]'
+    resetStreamingState()
+    es?.close()
+    es = null
+    isStreaming.value = false
+    loadSessions()
+    scrollToBottom()
+  }
 }
 
 async function handleClear() {
@@ -294,7 +300,7 @@ function handleKeyDown(e: KeyboardEvent) {
 
         <div v-for="msg in messages" :key="msg.id" class="flex gap-3" :class="msg.role === 'user' ? 'flex-row-reverse' : ''">
           <div class="shrink-0">
-            <div v-if="msg.role === 'assistant'" class="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-primary to-brand-light flex items-center justify-center text-white font-bold text-xs shadow-sm">
+            <div v-if="msg.role === 'assistant'" class="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-primary to-brand-light flex items-center justify-center text-text font-bold text-xs shadow-sm">
               AI
             </div>
             <el-avatar v-else :size="36" :icon="User" class="bg-brand-bg" />
@@ -302,11 +308,15 @@ function handleKeyDown(e: KeyboardEvent) {
           <div
             class="max-w-[70%] rounded-2xl px-5 py-3.5 text-sm leading-relaxed whitespace-pre-wrap"
             :class="msg.role === 'user'
-              ? 'bg-brand-primary text-white rounded-br-md'
+              ? 'bg-brand-primary text-text rounded-br-md'
               : 'bg-brand-card border border-brand-border text-text rounded-bl-md'"
           >
-            {{ msg.content }}
-            <span v-if="msg.role === 'assistant' && isStreaming && msg === messages[messages.length - 1]" class="typing-cursor" />
+            {{
+              isStreaming && msg.role === 'assistant' && msg.id === streamingMsgId
+                ? streamingContent
+                : msg.content
+            }}
+            <span v-if="msg.role === 'assistant' && isStreaming && msg.id === streamingMsgId" class="typing-cursor" />
           </div>
         </div>
       </div>

@@ -11,7 +11,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private readonly prisma: PrismaService,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        // SSE (EventSource) 不支持自定义请求头，从 query 参数取 token 作为 fallback
+        (req: any) => (req?.query?.token as string) ?? null,
+      ]),
       ignoreExpiration: false,
       secretOrKey:
         configService.get<string>('JWT_SECRET') ?? 'mindcrew-jwt-secret',
