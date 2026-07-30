@@ -11,7 +11,7 @@ export const docSearchToolProvider: FactoryProvider = {
     return tool(
       async ({ query, topK }: { query: string; topK?: number }) => {
         try {
-          const results = await ragService.search(query, topK ?? 3);
+          const results = await ragService.search(query, topK);
           if (results.length === 0) {
             return '知识库中未找到相关信息。';
           }
@@ -30,14 +30,14 @@ export const docSearchToolProvider: FactoryProvider = {
         description:
           '语义检索知识库文档，返回最相关的文档片段。输入查询内容（可选topK指定返回数量），返回包含文档名称、片段内容和相似度分数的结果列表',
         schema: z.object({
-          query: z.string().min(1).describe('搜索查询内容，如"公司考勤制度"'),
+          query: z.string().min(1).describe('搜索查询内容，如"公司考勤制度、公司新政策"'),
           topK: z
             .number()
             .int()
             .min(1)
             .max(10)
             .optional()
-            .describe('返回结果数量，默认3条'),
+            .describe('返回结果数量，不指定则使用系统默认配置'),
         }),
       },
     );

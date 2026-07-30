@@ -1,6 +1,21 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
+// ─── Shared Types ────────────────────────────────────────────────────────
+
+export interface Task {
+  id: string; topic: string; status: string; progress: number
+  agents: string[]; researcherCount: number; sourcesFound: number; createdAt: string
+}
+
+export interface AgentLog {
+  id: string; agent: string; action: string; content: string; createdAt: string
+}
+
+export interface TaskDetail extends Task {
+  report?: string | null; agentLogs: AgentLog[]
+}
+
 const api = axios.create({
   baseURL: '/api',
   timeout: 60000,
@@ -110,8 +125,8 @@ export const knowledgeApi = {
 // ─── Research ───
 export const researchApi = {
   list: (params?: { status?: string; page?: number; pageSize?: number }) =>
-    api.get('/research/tasks', { params }) as Promise<{ list: any[]; total: number }>,
-  get: (id: string) => api.get(`/research/tasks/${id}`),
+    api.get('/research/tasks', { params }) as Promise<{ list: Task[]; total: number }>,
+  get: (id: string) => api.get(`/research/tasks/${id}`) as Promise<TaskDetail>,
   create: (data: { topic: string; researcherCount?: number }) =>
     api.post('/research/tasks', data),
   delete: (id: string) => api.delete(`/research/tasks/${id}`),

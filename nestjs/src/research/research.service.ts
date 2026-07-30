@@ -33,10 +33,10 @@ export class ResearchService {
     if (status && status !== 'all') {
       where.status = status;
     }
-
-    const [tasks, total] = await Promise.all([
-      this.prisma.researchTask.findMany({
-        where,
+    
+    const [tasks, total]  = await Promise.all([
+      this.prisma.researchTask.findMany({                                           
+        where,  
         skip,
         take: pageSize,
         orderBy: { createdAt: 'desc' },
@@ -229,28 +229,32 @@ export class ResearchService {
 
       // Phase 2: Researcher 多路并行搜索
       let allSources = 0;
-      for (let i = 0; i < researcherCount; i++) {
-        await push(
-          `Researcher-${i + 1}`,
-          'thought',
-          `开始第 ${i + 1} 路调研...`,
-        );
-        const researchPrompt = `基于以下调研计划，作为第 ${i + 1}/${researcherCount} 路研究员，针对主题 "${topic}" 进行深度搜索和资料收集，请给出具体的数据、观点和来源：\n\n计划:\n${planResult}\n\n请给出第 ${i + 1} 路的调研结果。`;
-        const researchResult = await this.generateWithAI(researchPrompt);
-        await push(`Researcher-${i + 1}`, 'output', researchResult);
-        allSources += 3; // 假设每路约3条来源
-        await this.prisma.researchTask.update({
-          where: { id: taskId },
-          data: {
-            progress: 15 + Math.floor((i + 1) / researcherCount) * 40,
-            sourcesFound: allSources,
-          },
-        });
-      }
+      const researchResults = await Promise.all(
+        Array.from({ length: researcherCount }, async (_, i) => {
+          const index = i + 1;
+          await push(
+            `Researcher-${index}`,
+            'thought',
+            `开始第 ${index} 路调研...`,
+          );
+          const researchPrompt = `基于以下调研计划，作为第 ${index}/${researcherCount} 路研究员，针对主题 "${topic}" 进行深度搜索和资料收集，请给出具体的数据、观点和来源：\n\n计划:\n${planResult}\n\n请给出第 ${index} 路的调研结果。`;
+          const researchResult = await this.generateWithAI(researchPrompt);
+          await push(`Researcher-${index}`, 'output', researchResult);
+          allSources += 3; // 假设每路约3条来源
+          return researchResult;
+        }),
+      );
+      await this.prisma.researchTask.update({
+        where: { id: taskId },
+        data: { progress: 55, sourcesFound: allSources },
+      });
 
       // Phase 3: Writer 汇总生成报告
       await push('Writer', 'thought', '正在汇总所有研究员的发现，撰写调研报告...');
-      const writePrompt = `请综合以下研究结果，针对调研主题 "${topic}" 撰写一份专业、结构化的调研报告（Markdown 格式），包含摘要、背景、核心发现、分析、建议和参考来源：\n\n${planResult}\n\n`;
+      const researchSummary = researchResults
+        .map((r, i) => `--- Researcher-${i + 1} ---\n${r}`)
+        .join('\n\n');
+      const writePrompt = `请综合以下调研计划和各路研究员的发现，针对调研主题 "${topic}" 撰写一份专业、结构化的调研报告（Markdown 格式），包含摘要、背景、核心发现、分析、建议和参考来源：\n\n调研计划：\n${planResult}\n\n各路研究员发现：\n${researchSummary}\n\n`;
       const report = await this.generateWithAI(writePrompt);
       await push('Writer', 'output', report.slice(0, 500) + '...(报告已生成)');
 
@@ -295,7 +299,7 @@ export class ResearchService {
   private async generateWithAI(prompt: string): Promise<string> {
     // 使用现有的 AiService 进行文本生成
     const chunks: string[] = [];
-    const stream = this.aiService.runChainStream(prompt, undefined, 'cloud');
+    const stream = this.aiService.runChainStream(prompt, undefined, undefined);
     for await (const chunk of stream) {
       chunks.push(chunk);
     }

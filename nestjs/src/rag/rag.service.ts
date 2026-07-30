@@ -4,6 +4,7 @@ import { OpenAIEmbeddings } from '@langchain/openai';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { ModelRouterService } from '../ai/model-router/model-router.service';
+import { AppConfigService } from '../config/config.service';
 import {
   MilvusClient,
   DataType,
@@ -13,9 +14,11 @@ import {
 
 const COLLECTION_NAME = 'knowledge_base';
 const VECTOR_DIM = 1024;
-const CHUNK_SIZE = 500;
-const CHUNK_OVERLAP = 100;
-const TOP_K = 3;
+const SIMILARITY_THRESHOLD = 0.7;
+const DEFAULT_TOP_K = 5;
+const DEFAULT_CHUNK_SIZE = 500;
+const DEFAULT_CHUNK_OVERLAP = 50;
+const DEFAULT_EMBEDDING_MODEL = 'text-embedding-v4';
 
 /**
  * RAG 知识库服务
@@ -40,9 +43,14 @@ export class RagService implements OnModuleInit {
     '你是一个知识库助手，请基于以下提供的资料回答用户问题。如果资料中没有相关信息，请如实告知"资料中未找到相关信息"。\n\n' +
     '回答要求：\n1. 引用资料中的具体内容\n2. 语言简洁清晰\n3. 不要编造不存在的信息';
 
+  private lastEmbeddingModel: string;
+  private lastChunkSize: number;
+  private lastChunkOverlap: number;
+
   constructor(
     private readonly modelRouter: ModelRouterService,
     private readonly configService: ConfigService,
+    private readonly appConfigService: AppConfigService,
   ) {
     // 初始化 Milvus 客户端
     const address =
@@ -50,27 +58,76 @@ export class RagService implements OnModuleInit {
     const token = this.configService.get<string>('MILVUS_TOKEN') || '';
     this.client = new MilvusClient({ address, token });
 
-    // 初始化 Embedding 模型
-    this.embeddings = new OpenAIEmbeddings({
-      apiKey: this.configService.get<string>('API_KEY'),
-      model:
-        this.configService.get<string>('EMBEDDING_MODEL_NAME') ??
-        'text-embedding-v4',
-      configuration: {
-        baseURL: this.configService.get<string>('BASE_URL'),
-      },
-      dimensions: VECTOR_DIM,
-    });
-
-    // 初始化文本分割器（与 rag-book 一致）
-    this.splitter = new RecursiveCharacterTextSplitter({
-      chunkSize: CHUNK_SIZE,
-      chunkOverlap: CHUNK_OVERLAP,
-    });
+    // 占位：embeddings 和 splitter 将在 onModuleInit 中异步初始化
+    this.lastEmbeddingModel = DEFAULT_EMBEDDING_MODEL;
+    this.lastChunkSize = DEFAULT_CHUNK_SIZE;
+    this.lastChunkOverlap = DEFAULT_CHUNK_OVERLAP;
   }
 
   async onModuleInit() {
     await this.ensureCollection();
+    await this.applyConfigIfChanged(true);
+  }
+
+  /** 读取动态配置，按需重建 embeddings 和 splitter */
+  private async applyConfigIfChanged(force = false) {
+    try {
+      const cfg = await this.appConfigService.getAllConfig();
+      const ragCfg = cfg.rag;
+
+      const embeddingModel =
+        this.configService.get<string>('EMBEDDING_MODEL_NAME') ||
+        ragCfg.embeddingModel ||
+        DEFAULT_EMBEDDING_MODEL;
+      const chunkSize = ragCfg.chunkSize ?? DEFAULT_CHUNK_SIZE;
+      const chunkOverlap = ragCfg.chunkOverlap ?? DEFAULT_CHUNK_OVERLAP;
+
+      const needRebuildEmbeddings =
+        force || !this.embeddings || this.lastEmbeddingModel !== embeddingModel;
+      const needRebuildSplitter =
+        force ||
+        !this.splitter ||
+        this.lastChunkSize !== chunkSize ||
+        this.lastChunkOverlap !== chunkOverlap;
+
+      if (needRebuildEmbeddings) {
+        this.embeddings = new OpenAIEmbeddings({
+          apiKey: this.configService.get<string>('API_KEY'),
+          model: embeddingModel,
+          configuration: {
+            baseURL: this.configService.get<string>('BASE_URL'),
+          },
+          dimensions: VECTOR_DIM,
+        });
+        this.lastEmbeddingModel = embeddingModel;
+        if (!force) {
+          this.logger.log(`Embedding 模型已更新为: ${embeddingModel}`);
+        }
+      }
+
+      if (needRebuildSplitter) {
+        this.splitter = new RecursiveCharacterTextSplitter({
+          chunkSize,
+          chunkOverlap,
+        });
+        this.lastChunkSize = chunkSize;
+        this.lastChunkOverlap = chunkOverlap;
+        if (!force) {
+          this.logger.log(
+            `分块参数已更新: chunkSize=${chunkSize}, chunkOverlap=${chunkOverlap}`,
+          );
+        }
+      }
+    } catch (error) {
+      if (!this.embeddings) {
+        throw new Error(
+          `RAG 初始化失败：无法加载配置 - ${(error as Error).message}`,
+        );
+      }
+      this.logger.warn(
+        `刷新 RAG 配置失败，使用上次配置: ${(error as Error).message}`,
+      );
+    }
   }
 
   // ─── 集合管理 ──────────────────────────────────────────────────────────
@@ -139,8 +196,10 @@ export class RagService implements OnModuleInit {
       }
     }
 
+    await this.applyConfigIfChanged();
+
     const chunks = await this.splitter.splitText(text);
-    this.logger.log(`文本拆分完成: ${chunks.length} 个片段`);
+    this.logger.log(`文本拆分完成: ${chunks.length} 个片段（chunkSize=${this.lastChunkSize}, overlap=${this.lastChunkOverlap}）`);
 
     // 并发生成向量（与 rag-book 一致）
     const insertData = await Promise.all(
@@ -178,21 +237,27 @@ export class RagService implements OnModuleInit {
       throw new Error('RAG 系统未初始化，请先上传文档');
     }
 
+    await this.applyConfigIfChanged();
+    const cfg = await this.appConfigService.getAllConfig();
+    const topK = cfg.rag.topK ?? DEFAULT_TOP_K;
+
     // 1. 向量化问题
     const queryVector = await this.embeddings.embedQuery(question);
 
     // 2. Milvus 相似度搜索（与 rag-book 一致）
     const searchResult = await this.client.search({
       collection_name: COLLECTION_NAME,
-      limit: TOP_K,
+      limit: topK,
       vector: queryVector,
       output_fields: ['id', 'document_id', 'document_name', 'chunk_index', 'content'],
       metric_type: MetricType.COSINE,
     });
 
-    const results = searchResult.results;
+    const results = searchResult.results.filter(
+      (item) => (item.score as number) >= SIMILARITY_THRESHOLD,
+    );
     if (results.length === 0) {
-      return { answer: '知识库中未找到相关信息。', sources: [] };
+      return { answer: '', sources: [] };
     }
 
     // 3. 构建 Prompt
@@ -224,28 +289,37 @@ export class RagService implements OnModuleInit {
   /** 纯检索（不调用 LLM 生成），返回原始片段 */
   async search(
     question: string,
-    topK: number = 3,
+    topK?: number,
   ): Promise<{ content: string; documentName: string; chunkIndex: number; score: number }[]> {
     if (!this.initialized) {
       throw new Error('RAG 系统未初始化');
+    }
+
+    await this.applyConfigIfChanged();
+    let effectiveTopK = topK;
+    if (effectiveTopK == null) {
+      const cfg = await this.appConfigService.getAllConfig();
+      effectiveTopK = cfg.rag.topK ?? DEFAULT_TOP_K;
     }
 
     const queryVector = await this.embeddings.embedQuery(question);
 
     const searchResult = await this.client.search({
       collection_name: COLLECTION_NAME,
-      limit: topK,
+      limit: effectiveTopK,
       vector: queryVector,
       output_fields: ['id', 'document_id', 'document_name', 'chunk_index', 'content'],
       metric_type: MetricType.COSINE,
     });
 
-    return searchResult.results.map((item) => ({
-      content: (item as any).content as string,
-      documentName: (item as any).document_name as string,
-      chunkIndex: (item as any).chunk_index as number,
-      score: (item as any).score as number,
-    }));
+    return searchResult.results
+      .filter((item) => (item.score as number) >= SIMILARITY_THRESHOLD)
+      .map((item) => ({
+        content: (item as any).content as string,
+        documentName: (item as any).document_name as string,
+        chunkIndex: (item as any).chunk_index as number,
+        score: (item as any).score as number,
+      }));
   }
 
   isInitialized(): boolean {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ChatDotRound, Cpu, Collection, DataAnalysis, Setting, UserFilled, Connection } from '@element-plus/icons-vue'
+import { HomeFilled, ChatDotRound, Cpu, Collection, DataAnalysis, Setting, UserFilled, Connection } from '@element-plus/icons-vue'
 import { dashboardApi } from '@/api'
 import { getErrorMessage } from '@/utils/error'
 import { ElMessage } from 'element-plus'

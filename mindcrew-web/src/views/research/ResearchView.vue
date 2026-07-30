@@ -1,20 +1,36 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { Plus, View, Cpu } from '@element-plus/icons-vue'
-import { researchApi } from '@/api'
+import { researchApi, type Task, type TaskDetail } from '@/api'
 import { getErrorMessage } from '@/utils/error'
+import { formatDateTime, formatDateOnly } from '@/utils/time'
 import { ElMessage } from 'element-plus'
 
-interface Task {
-  id: string; topic: string; status: string; progress: number
-  agents: string[]; researcherCount: number; sourcesFound: number; createdAt: string
-}
 const tasks = ref<Task[]>([])
 const loading = ref(true)
 const dialogVisible = ref(false)
 const newTopic = ref('')
 const researcherCount = ref(2)
 const creating = ref(false)
+
+const detailVisible = ref(false)
+const selectedTask = ref<TaskDetail | null>(null)
+const detailLoading = ref(false)
+
+async function openDetail(id: string) {
+  detailLoading.value = true
+  detailVisible.value = true
+  selectedTask.value = null
+  try {
+    const res = await researchApi.get(id)
+    selectedTask.value = res
+  } catch (e) {
+    ElMessage.error(`加载详情失败：${getErrorMessage(e)}`)
+    detailVisible.value = false
+  } finally {
+    detailLoading.value = false
+  }
+}
 
 const statusMap: Record<string, { label: string; type: string }> = {
   running: { label: '进行中', type: 'warning' },
@@ -137,11 +153,11 @@ onBeforeUnmount(() => {
             <div class="flex items-center gap-2 mb-1">
               <span class="text-xs text-text-muted font-mono">{{ task.id.slice(0, 8) }}</span>
               <el-tag :type="statusMap[task.status]?.type as any" size="small">{{ statusMap[task.status]?.label ?? task.status }}</el-tag>
-              <span class="text-xs text-text-muted">{{ task.createdAt?.slice(0, 10) }}</span>
+              <span class="text-xs text-text-muted">{{ formatDateOnly(task.createdAt) }}</span>
             </div>
             <h3 class="text-text font-semibold truncate">{{ task.topic }}</h3>
           </div>
-          <el-button text :icon="View" size="small" class="text-text-muted!" @click.stop>详情</el-button>
+          <el-button text :icon="View" size="small" class="text-text-muted!" @click.stop="openDetail(task.id)">详情</el-button>
         </div>
         <div v-if="task.status === 'running'" class="mt-3">
           <div class="flex items-center justify-between text-xs text-text-muted mb-1">
@@ -173,6 +189,42 @@ onBeforeUnmount(() => {
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="creating" @click="createTask">启动调研</el-button>
       </template>
+    </el-dialog>
+    <!-- Task Detail Dialog -->
+    <el-dialog v-model="detailVisible" title="调研详情" width="720px" top="5vh">
+      <div v-if="detailLoading" class="text-center text-text-muted py-8">加载中...</div>
+      <div v-else-if="selectedTask" class="space-y-4 max-h-[65vh] overflow-y-auto pr-2">
+        <div class="flex items-center gap-2">
+          <el-tag :type="statusMap[selectedTask.status]?.type as any">
+            {{ statusMap[selectedTask.status]?.label ?? selectedTask.status }}
+          </el-tag>
+          <span class="text-xs text-text-muted">{{ formatDateOnly(selectedTask.createdAt) }}</span>
+          <span class="text-xs text-text-muted ml-auto">进度 {{ selectedTask.progress }}%</span>
+        </div>
+
+        <h2 class="text-lg font-bold text-text">{{ selectedTask.topic }}</h2>
+
+        <div v-if="selectedTask.report" class="rounded-lg p-4 bg-brand-bg border border-brand-border">
+          <h3 class="text-sm font-semibold text-text mb-2">调研报告</h3>
+          <div class="text-sm text-text whitespace-pre-wrap leading-relaxed">{{ selectedTask.report }}</div>
+        </div>
+
+        <div v-if="selectedTask.agentLogs?.length > 0">
+          <h3 class="text-sm font-semibold text-text mb-2">执行过程</h3>
+          <el-timeline>
+            <el-timeline-item
+              v-for="log in selectedTask.agentLogs"
+              :key="log.id"
+              :timestamp="formatDateTime(log.createdAt)"
+              placement="top"
+              :color="log.action === 'output' ? 'var(--color-success)' : log.agent === 'Critic' ? 'var(--color-warning)' : 'var(--color-info)'"
+            >
+              <div class="text-xs text-text-muted mb-1">{{ log.agent }} · {{ log.action }}</div>
+              <div class="text-sm whitespace-pre-wrap" :class="log.action === 'output' ? 'text-text' : 'text-text-muted'">{{ log.content }}</div>
+            </el-timeline-item>
+          </el-timeline>
+        </div>
+      </div>
     </el-dialog>
   </div>
 </template>
